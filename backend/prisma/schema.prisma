@@ -1,0 +1,205 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum TransactionType {
+  SEND
+  RECEIVE
+  WITHDRAWAL
+  DEPOSIT
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  BLOCKED
+}
+
+enum AssetType {
+  BTC
+  ETH
+  BNB
+  ERC20
+  TRC20
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  firstName         String?
+  lastName          String?
+  isEmailVerified   Boolean  @default(false)
+  is2FAEnabled      Boolean  @default(false)
+  twoFactorSecret   String?
+  role              UserRole @default(USER)
+  isActive          Boolean  @default(true)
+  isBlocked         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  wallets           Wallet[]
+  transactions      Transaction[]
+  withdrawals       Withdrawal[]
+  adminWithdrawals  Withdrawal[] @relation("AdminWithdrawals")
+  adminAdjustments  AdminBalanceAdjustment[] @relation("AdminAdjustments")
+  adminAuditLogs    AuditLog[] @relation("AdminAuditLogs")
+  auditLogs         AuditLog[]
+  adminBalanceAdjustments AdminBalanceAdjustment[]
+
+  @@map("users")
+}
+
+model Wallet {
+  id          String   @id @default(cuid())
+  userId      String
+  address     String   @unique
+  assetType   AssetType
+  balance     Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balances    Balance[]
+  transactions Transaction[]
+  withdrawals Withdrawal[]
+
+  @@map("wallets")
+}
+
+model Asset {
+  id          String    @id @default(cuid())
+  symbol      String    @unique
+  name        String
+  type        AssetType
+  contractAddress String?
+  decimals    Int       @default(18)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  balances    Balance[]
+  transactions Transaction[]
+  withdrawals Withdrawal[]
+  adminBalanceAdjustments AdminBalanceAdjustment[]
+
+  @@map("assets")
+}
+
+model Balance {
+  id        String  @id @default(cuid())
+  walletId  String
+  assetId   String
+  amount    Float   @default(0)
+  locked    Float   @default(0)
+
+  wallet    Wallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  asset     Asset   @relation(fields: [assetId], references: [id])
+
+  @@unique([walletId, assetId])
+  @@map("balances")
+}
+
+model Transaction {
+  id            String          @id @default(cuid())
+  userId        String
+  walletId      String
+  assetId       String
+  type          TransactionType
+  amount        Float
+  fee           Float           @default(0)
+  fromAddress   String?
+  toAddress     String?
+  txHash        String?         @unique
+  blockNumber   String?
+  status        String          @default("pending")
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet        Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  asset         Asset           @relation(fields: [assetId], references: [id])
+
+  @@map("transactions")
+}
+
+model Withdrawal {
+  id            String           @id @default(cuid())
+  userId        String
+  walletId      String
+  assetId       String
+  amount        Float
+  fee           Float            @default(0)
+  toAddress     String
+  status        WithdrawalStatus @default(PENDING)
+  adminId       String?
+  adminNote     String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet        Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  asset         Asset            @relation(fields: [assetId], references: [id])
+  admin         User?            @relation("AdminWithdrawals", fields: [adminId], references: [id])
+
+  @@map("withdrawals")
+}
+
+model AdminBalanceAdjustment {
+  id            String   @id @default(cuid())
+  userId        String
+  adminId       String
+  assetId       String
+  oldBalance    Float
+  newBalance    Float
+  adjustment    Float
+  reason        String
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin         User     @relation("AdminAdjustments", fields: [adminId], references: [id])
+  asset         Asset    @relation(fields: [assetId], references: [id])
+
+  @@map("admin_balance_adjustments")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  adminId     String?
+  action      String
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin       User?    @relation("AdminAuditLogs", fields: [adminId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
