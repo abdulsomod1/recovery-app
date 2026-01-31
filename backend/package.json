@@ -39,6 +39,9 @@
     "prisma": "^7.3.0",
     "redis": "^5.10.0"
   },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0"
+  },
   "jest": {
     "moduleFileExtensions": [
       "js",
